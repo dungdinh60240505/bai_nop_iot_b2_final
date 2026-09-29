@@ -42,9 +42,9 @@ const int ECHO_PIN = 18;     // Echo cua HC-SR04
 const int LED_PIN = 2;       // LED bao trang thai gui du lieu
 const int ALARM_LED_PIN = 4; // LED canh bao vat can qua gan
 
-const unsigned long SEND_INTERVAL_MS = 5000;           // Chu ky gui du lieu
+const unsigned long SEND_INTERVAL_MS = 5000;            // Chu ky gui du lieu
 const unsigned long NTP_RESYNC_MS = 10UL * 60UL * 1000; // Dong bo lai NTP moi 10 phut
-const float DISTANCE_ALARM_CM = 15.0;                  // Nguong canh bao khoang cach
+const float DISTANCE_ALARM_CM = 15.0;                   // Nguong canh bao khoang cach
 
 // ================= BIEN TOAN CUC =================
 WiFiClient wifiClient;

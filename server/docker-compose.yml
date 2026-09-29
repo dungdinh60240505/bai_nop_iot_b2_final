@@ -17,9 +17,9 @@ services:
     container_name: iot-mongodb
     ports:
       - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-iot}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-iot123}
+    #environment:
+    #  MONGO_INITDB_ROOT_USERNAME: iot #${MONGO_USER:-iot}
+    #  MONGO_INITDB_ROOT_PASSWORD: iot123 #các${MONGO_PASSWORD:-iot123}
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -36,7 +36,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER:-iot}:${MONGO_PASSWORD:-iot123}@mongodb:27017/?authSource=admin
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
       ME_CONFIG_BASICAUTH: "false"
     depends_on:
       mongodb:

@@ -3,154 +3,56 @@
   "author": "IoT Node Demo",
   "editor": "wokwi",
   "parts": [
-    {
-      "type": "wokwi-esp32-devkit-v1",
-      "id": "esp",
-      "top": 0,
-      "left": 0,
-      "attrs": {}
-    },
-    {
-      "type": "wokwi-dht22",
-      "id": "dht22",
-      "top": -80,
-      "left": 200,
-      "attrs": {}
-    },
-    {
-      "type": "wokwi-hc-sr04",
-      "id": "ultrasonic",
-      "top": 100,
-      "left": 200,
-      "attrs": {}
-    },
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 4.7, "left": 4.6, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht22", "top": -134.1, "left": 205.8, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic", "top": 87.9, "left": 456.7, "attrs": {} },
     {
       "type": "wokwi-led",
       "id": "led_status",
-      "top": -40,
-      "left": 320,
-      "attrs": {
-        "color": "green"
-      }
+      "top": -42,
+      "left": 378.2,
+      "attrs": { "color": "green" }
     },
     {
       "type": "wokwi-led",
       "id": "led_alarm",
-      "top": 20,
-      "left": 320,
-      "attrs": {
-        "color": "red"
-      }
+      "top": 15.6,
+      "left": 301.4,
+      "attrs": { "color": "red" }
     },
     {
       "type": "wokwi-resistor",
       "id": "r1",
-      "top": -40,
-      "left": 360,
-      "attrs": {
-        "value": "220"
-      }
+      "top": 41.8,
+      "left": 373.55,
+      "rotate": 270,
+      "attrs": { "value": "220" }
     },
     {
       "type": "wokwi-resistor",
       "id": "r2",
-      "top": 20,
-      "left": 360,
-      "attrs": {
-        "value": "220"
-      }
+      "top": 80.2,
+      "left": 306.35,
+      "rotate": 270,
+      "attrs": { "value": "220" }
     }
   ],
   "connections": [
-    [
-      "esp:TX0",
-      "$serialMonitor:RX",
-      "",
-      []
-    ],
-    [
-      "esp:RX0",
-      "$serialMonitor:TX",
-      "",
-      []
-    ],
-    [
-      "dht22:VCC",
-      "esp:3V3",
-      "red",
-      []
-    ],
-    [
-      "dht22:GND",
-      "esp:GND.1",
-      "black",
-      []
-    ],
-    [
-      "dht22:SDA",
-      "esp:D15",
-      "green",
-      []
-    ],
-    [
-      "ultrasonic:VCC",
-      "esp:5V",
-      "red",
-      []
-    ],
-    [
-      "ultrasonic:GND",
-      "esp:GND.2",
-      "black",
-      []
-    ],
-    [
-      "ultrasonic:TRIG",
-      "esp:D5",
-      "yellow",
-      []
-    ],
-    [
-      "ultrasonic:ECHO",
-      "esp:D18",
-      "blue",
-      []
-    ],
-    [
-      "esp:D2",
-      "r1:1",
-      "green",
-      []
-    ],
-    [
-      "r1:2",
-      "led_status:A",
-      "green",
-      []
-    ],
-    [
-      "led_status:C",
-      "esp:GND.1",
-      "black",
-      []
-    ],
-    [
-      "esp:D4",
-      "r2:1",
-      "orange",
-      []
-    ],
-    [
-      "r2:2",
-      "led_alarm:A",
-      "orange",
-      []
-    ],
-    [
-      "led_alarm:C",
-      "esp:GND.2",
-      "black",
-      []
-    ]
-  ]
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "dht22:VCC", "esp:3V3", "red", [ "h-76.8", "v182.4" ] ],
+    [ "dht22:GND", "esp:GND.1", "black", [ "v38.4", "h-86.4", "v134.5" ] ],
+    [ "dht22:SDA", "esp:D15", "green", [ "v19.2", "h-76.7", "v144.2" ] ],
+    [ "ultrasonic:VCC", "esp:5V", "red", [] ],
+    [ "ultrasonic:GND", "esp:GND.2", "black", [ "v67.2", "h-553" ] ],
+    [ "ultrasonic:TRIG", "esp:D5", "yellow", [ "v38.4", "h-413.2", "v-124.8" ] ],
+    [ "ultrasonic:ECHO", "esp:D18", "blue", [ "v57.6", "h-413.6", "v-153.6" ] ],
+    [ "esp:D2", "r1:1", "green", [] ],
+    [ "r1:2", "led_status:A", "green", [] ],
+    [ "led_status:C", "esp:GND.1", "black", [ "h0.4", "v153.7" ] ],
+    [ "esp:D4", "r2:1", "orange", [ "h239.7", "v0.1", "h67.2" ] ],
+    [ "r2:2", "led_alarm:A", "orange", [ "v1.2", "h-86.4" ] ],
+    [ "led_alarm:C", "esp:GND.2", "black", [ "v230.4", "h-345.2", "v-134.3" ] ]
+  ],
+  "dependencies": {}
 }
