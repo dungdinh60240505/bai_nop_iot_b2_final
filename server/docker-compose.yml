@@ -1,0 +1,48 @@
+# Ha tang cho Bai thuc hanh so 2: Mosquitto (MQTT) + MongoDB 7
+# Chay:  docker compose up -d
+# Them giao dien web xem DB (tuy chon):  docker compose --profile tools up -d
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: iot-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: iot-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-iot}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-iot123}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mongo-express:
+    image: mongo-express:1
+    container_name: iot-mongo-express
+    profiles: ["tools"]
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER:-iot}:${MONGO_PASSWORD:-iot123}@mongodb:27017/?authSource=admin
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  mongo_data:
