@@ -16,6 +16,7 @@ Retention policy: time-series dung expireAfterSeconds, collection thuong dung TT
 from __future__ import annotations
 
 import argparse
+import sys
 
 from pymongo import ASCENDING, DESCENDING
 from pymongo.database import Database
@@ -30,7 +31,17 @@ DAY = 24 * 3600
 def ensure_timeseries(db: Database, name: str, retention_days: int) -> None:
     expire = retention_days * DAY
     if name in db.list_collection_names():
-        # Collection da ton tai -> chi cap nhat retention
+        # Collection da ton tai -> chi cap nhat retention.
+        # Neu no la collection thuong (do collector/preprocess ghi truoc khi
+        # chay init_db), collMod se loi kho hieu. Bao loi ro rang thay vao do.
+        options = next(iter(db.list_collections(filter={"name": name})), {}).get("options", {})
+        if "timeseries" not in options:
+            raise RuntimeError(
+                f"{name} da ton tai nhung khong phai time-series collection. "
+                "Thuong do da ghi du lieu truoc khi chay init_db. "
+                "Hay chay 'python init_db.py --reset' (se xoa database) "
+                "hoac migrate collection thu cong."
+            )
         db.command("collMod", name, expireAfterSeconds=expire)
         log.info("Cap nhat retention %s = %d ngay", name, retention_days)
     else:
@@ -80,7 +91,11 @@ def main() -> None:
     if args.reset:
         db.client.drop_database(db.name)
         log.warning("Da xoa database %s", db.name)
-    init(db)
+    try:
+        init(db)
+    except Exception as exc:  # noqa: BLE001 - CLI can thong bao gon, khong traceback
+        log.error("Khoi tao schema that bai: %s", exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

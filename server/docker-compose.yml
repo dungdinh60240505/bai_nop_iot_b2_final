@@ -1,12 +1,17 @@
 # Ha tang cho Bai thuc hanh so 2: Mosquitto (MQTT) + MongoDB 7
 # Chay:  docker compose up -d
 # Them giao dien web xem DB (tuy chon):  docker compose --profile tools up -d
+#
+# Luu y: tren Windows rat de co mot Mosquitto service khac dang chiem
+# 127.0.0.1:1883. Khi do localhost:1883 se vao broker do chu khong vao
+# container, collector se khong nhan duoc du lieu. Vi vay mac dinh cua lab
+# dung host port 1884 (MQTT) va 27018 (MongoDB); co the override qua .env.
 services:
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: iot-mosquitto
     ports:
-      - "1883:1883"
+      - "${MQTT_HOST_PORT:-1884}:1883"
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - mosquitto_data:/mosquitto/data
@@ -16,10 +21,12 @@ services:
     image: mongo:7
     container_name: iot-mongodb
     ports:
-      - "27017:27017"
+      - "${MONGO_HOST_PORT:-27018}:27017"
+    # Lab mac dinh chay MongoDB khong auth. Neu bat auth thi phai doi
+    # MONGO_URI trong .env va tao lai volume (docker compose down -v).
     #environment:
-    #  MONGO_INITDB_ROOT_USERNAME: iot #${MONGO_USER:-iot}
-    #  MONGO_INITDB_ROOT_PASSWORD: iot123 #các${MONGO_PASSWORD:-iot123}
+    #  MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-iot}
+    #  MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-iot123}
     volumes:
       - mongo_data:/data/db
     healthcheck:

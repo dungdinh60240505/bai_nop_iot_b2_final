@@ -32,6 +32,18 @@ from common import PROCESSED, RAW, RUNS, SENSOR_FIELDS, get_db, settings, setup_
 
 log = setup_logging("preprocess")
 
+# Chi kiem tra schema 1 lan cho moi database trong tien trinh hien tai.
+_SCHEMA_READY: set[str] = set()
+
+
+def _ensure_schema(db: Database) -> None:
+    if db.name in _SCHEMA_READY:
+        return
+    from init_db import init as init_schema
+    init_schema(db)
+    _SCHEMA_READY.add(db.name)
+
+
 # Dai do theo datasheet: ngoai dai = sai so cam bien
 SPEC_RANGE = {"temperature": (-40.0, 80.0), "humidity": (0.0, 100.0), "distance_cm": (2.0, 400.0)}
 # Do phan tan toi thieu: tranh truong hop du lieu gan nhu hang so (Wokwi) lam IQR = 0
@@ -186,6 +198,7 @@ def run(db: Database, start: datetime, end: datetime, window: str = "1min", meth
         detrend_window: int = 11, gap_limit: int = 3, roll: int = 5, device_id: str | None = None,
         expected_interval_s: float = 5.0, csv_path: str | None = None) -> dict:
     t0 = time.perf_counter()
+    _ensure_schema(db)
     start = floor_time(start, window)
     run_id = uuid.uuid4().hex[:12]
     raw = load_raw(db, start, end, device_id)

@@ -101,6 +101,19 @@ with st.sidebar:
         st.stop()
     if not devices:
         st.info("Chưa có dữ liệu. Hãy chạy collector.py và ESP32 (hoặc simulator.py).")
+        # st.stop() ở dưới sẽ dừng script; fragment này vẫn tự kiểm tra lại
+        # để dashboard tự hiện dữ liệu ngay khi collector ghi bản ghi đầu tiên.
+        @st.fragment(run_every="5s")
+        def wait_for_data() -> None:
+            try:
+                if device_list():
+                    st.rerun(scope="app")
+            except Exception:  # noqa: BLE001 - MongoDB tạm thời không sẵn sàng
+                pass
+            if st.button("Kiểm tra lại"):
+                st.rerun(scope="app")
+
+        wait_for_data()
         st.stop()
     device = st.selectbox("Thiết bị", devices)
     range_label = st.radio("Khoảng thời gian", list(RANGES), index=1, horizontal=True)
@@ -108,7 +121,6 @@ with st.sidebar:
     window = st.selectbox("Cửa sổ dữ liệu đã xử lý", ["1min", "5min", "30s", "15min", "1h"])
     st.caption(f"Múi giờ hiển thị: {settings.timezone}")
 
-start = datetime.now(timezone.utc) - timedelta(minutes=RANGES[range_label])
 tab_rt, tab_proc, tab_lat, tab_store = st.tabs(
     ["⚡ Real-time", "🧹 Đã tiền xử lý", "⏱️ Độ trễ", "💾 Lưu trữ & chất lượng"])
 
@@ -116,8 +128,10 @@ tab_rt, tab_proc, tab_lat, tab_store = st.tabs(
 @st.fragment(run_every=f"{refresh}s")
 def realtime_panel() -> None:
     dev = db()[DEVICES].find_one({"_id": device}) or {}
-    df = query_raw(device, start)
     now = datetime.now(timezone.utc)
+    # Tính lại mỗi lần fragment chạy, nếu dùng start của lần load trang đầu
+    # thì cửa sổ "15 phút / 1 giờ" sẽ bị đứng yên sau vài giờ.
+    df = query_raw(device, now - timedelta(minutes=RANGES[range_label]))
     last_seen = dev.get("last_seen")
     online = bool(last_seen and (now - last_seen).total_seconds() < ONLINE_AFTER_S)
 
@@ -161,14 +175,20 @@ def processed_panel() -> None:
     c1, c2, c3 = st.columns([2, 2, 1])
     field = c1.selectbox("Đại lượng", SENSOR_FIELDS, format_func=LABELS.get)
     method = c2.radio("Phương pháp outlier (để hiển thị)", ["iqr", "zscore"], horizontal=True)
+    panel_start = datetime.now(timezone.utc) - timedelta(minutes=RANGES[range_label])
     if c3.button("▶ Chạy tiền xử lý ngay", width="stretch"):
         with st.spinner("Đang tiền xử lý..."):
-            summary = preprocess.run(db(), start, datetime.now(timezone.utc), window=window, method=method,
-                                     device_id=device)
-        st.success(f"Xong run {summary['run_id']} trong {summary['duration_ms']} ms")
+            end = datetime.now(timezone.utc)
+            try:
+                summary = preprocess.run(db(), end - timedelta(minutes=RANGES[range_label]),
+                                         end, window=window, method=method, device_id=device)
+            except Exception as exc:  # noqa: BLE001 - hiển thị lỗi ngay trên UI
+                st.error(f"Tiền xử lý thất bại: {exc}")
+            else:
+                st.success(f"Xong run {summary['run_id']} trong {summary['duration_ms']} ms")
 
-    raw = query_raw(device, start)
-    proc = query_processed(device, start, window)
+    raw = query_raw(device, panel_start)
+    proc = query_processed(device, panel_start, window)
     if raw.empty:
         st.info("Không có dữ liệu thô.")
         return
@@ -218,7 +238,7 @@ def processed_panel() -> None:
 
 
 def latency_panel() -> None:
-    lat = query_latency(device, start)
+    lat = query_latency(device, datetime.now(timezone.utc) - timedelta(minutes=RANGES[range_label]))
     if lat.empty:
         st.info("Chưa có mẫu độ trễ (cần ESP32 đồng bộ NTP để gửi trường ts).")
         return
@@ -252,11 +272,18 @@ def storage_panel() -> None:
     devs = pd.DataFrame(list(db()[DEVICES].find({})))
     if not devs.empty:
         for c in ["received", "stored", "duplicates", "lost", "rejected", "reboots"]:
-            devs[c] = devs.get(c, 0)
-            devs[c] = devs[c].fillna(0).astype(int)
+            if c not in devs.columns:
+                devs[c] = 0
+            devs[c] = pd.to_numeric(devs[c], errors="coerce").fillna(0).astype(int)
+        for c in ["room", "status"]:
+            if c not in devs.columns:
+                devs[c] = "—"
+        if "last_seen" not in devs.columns:
+            devs["last_seen"] = pd.NaT
         expected = devs["stored"] + devs["lost"] + devs["rejected"]
         devs["tỉ lệ mất (%)"] = (100 * devs["lost"] / expected.where(expected > 0)).round(2)
         devs["last_seen"] = local(devs["last_seen"]).dt.strftime("%Y-%m-%d %H:%M:%S")
+        devs["last_seen"] = devs["last_seen"].fillna("—")
         st.dataframe(devs[["_id", "room", "status", "last_seen", "received", "stored", "duplicates",
                            "lost", "rejected", "reboots", "tỉ lệ mất (%)"]].rename(columns={"_id": "device_id"}),
                      hide_index=True, width="stretch")

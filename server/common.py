@@ -29,17 +29,22 @@ SENSOR_FIELDS = ["temperature", "humidity", "distance_cm"]
 @dataclass(frozen=True)
 class Settings:
     mqtt_host: str = os.getenv("MQTT_HOST", "localhost")
-    mqtt_port: int = int(os.getenv("MQTT_PORT", "1883"))
+    mqtt_port: int = int(os.getenv("MQTT_PORT", "1884"))
     telemetry_topic: str = os.getenv("MQTT_TELEMETRY_TOPIC", "iot/sensor/#")
     status_topic: str = os.getenv("MQTT_STATUS_TOPIC", "iot/status/#")
     mqtt_client_id: str = os.getenv("MQTT_CLIENT_ID", "collector-lab2")
-    mongo_uri: str = os.getenv("MONGO_URI", "mongodb://iot:iot123@localhost:27017/?authSource=admin")
+    mqtt_bridge_id: str = os.getenv("MQTT_BRIDGE_ID", "bridge-dungdinh60240505-lab2")
+    mongo_uri: str = os.getenv("MONGO_URI", "mongodb://localhost:27018/")
     mongo_db: str = os.getenv("MONGO_DB", "iot_lab2")
     raw_retention_days: int = int(os.getenv("RAW_RETENTION_DAYS", "30"))
     processed_retention_days: int = int(os.getenv("PROCESSED_RETENTION_DAYS", "180"))
     latency_retention_days: int = int(os.getenv("LATENCY_RETENTION_DAYS", "30"))
     rejected_retention_days: int = int(os.getenv("REJECTED_RETENTION_DAYS", "7"))
     timezone: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh")
+
+    @property
+    def bridge_state_topic(self) -> str:
+        return f"$SYS/broker/connection/{self.mqtt_bridge_id}/state"
 
 
 settings = Settings()

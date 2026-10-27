@@ -9,7 +9,10 @@ Chuc nang:
   * Ghi sensor_raw (time-series); goi loi -> rejected_messages
   * Do tre: net_ms = recv - ts(ESP32), db_ms = ghi xong - recv, e2e_ms = ghi xong - ts
   * MongoDB loi -> dem tam trong RAM, tu ghi bu khi ket noi lai
-  * Persistent session QoS 1: collector tat tam thi Mosquitto giu lai message
+  * Persistent session QoS 1: chi giu duoc message duoc publish voi QoS >= 1
+    (simulator.py / client local). Wokwi dung PubSubClient publish QoS 0 nen
+    bridge chuyen tiep QoS 0; goi trong luc collector offline co the mat va
+    duoc phat hien qua khe seq (lost).
 """
 from __future__ import annotations
 
@@ -30,6 +33,7 @@ from pymongo.errors import PyMongoError
 
 from common import (DEVICES, LATENCY, RAW, REJECTED, SENSOR_FIELDS, get_db,
                     settings, setup_logging)
+from init_db import init as init_schema
 
 log = setup_logging("collector")
 
@@ -141,6 +145,12 @@ class Collector:
         self.room_status: dict[str, str] = {}
         self.stats = {"received": 0, "stored": 0, "duplicates": 0, "rejected": 0,
                       "lost": 0, "reboots": 0, "buffered": 0}
+        # Chan doan ket noi: bridge co ton tai khong, lan cuoi nhan telemetry.
+        self.bridge_state: str | None = None
+        self.connected_at: float | None = None
+        self.last_telemetry_at: float | None = None
+        self._warned_no_bridge = False
+        self._warned_no_data = False
 
     # ---------- khoi dong ----------
     def warm_up(self) -> None:
@@ -173,6 +183,8 @@ class Collector:
     # ---------- xu ly telemetry ----------
     def handle_telemetry(self, topic: str, payload: bytes, recv_s: float | None = None) -> str:
         recv_ms = (recv_s or time.time()) * 1000.0
+        self.last_telemetry_at = recv_ms / 1000.0
+        self._warned_no_data = False
         self.stats["received"] += 1
         record, errors = validate(topic, payload, recv_ms)
 
@@ -301,6 +313,41 @@ class Collector:
         except PyMongoError as exc:
             log.error("Khong cap nhat duoc status: %s", exc)
 
+    # ---------- chan doan ket noi ----------
+    def handle_bridge_state(self, payload: bytes) -> None:
+        state = payload.decode("utf-8", errors="replace").strip()
+        self.bridge_state = state
+        if state == "1":
+            log.info("Bridge %s ONLINE (du lieu tu broker cong khai se ve local)",
+                     settings.mqtt_bridge_id)
+        else:
+            log.warning("Bridge %s OFFLINE (state=%s). Kiem tra ket noi broker.emqx.io cua ESP32/Wokwi.",
+                        settings.mqtt_bridge_id, state)
+
+    def health_check(self, client: mqtt.Client) -> None:
+        """Canh bao som khi broker khong co bridge hoac khong co telemetry."""
+        if not client.is_connected() or self.connected_at is None:
+            return
+        now = time.time()
+        uptime = now - self.connected_at
+        if uptime > 8 and self.bridge_state is None and not self._warned_no_bridge:
+            self._warned_no_bridge = True
+            log.warning(
+                "Khong thay retained topic '%s'. Broker %s:%d khong phai Mosquitto cua "
+                "docker-compose (hoac bridge chua tung ket noi). Kiem tra MQTT_PORT/"
+                "MQTT_HOST_PORT; tren Windows thuong do Mosquitto service chiem 127.0.0.1:1883.",
+                settings.bridge_state_topic, settings.mqtt_host, settings.mqtt_port)
+        if uptime > 60 and self.last_telemetry_at is None and not self._warned_no_data:
+            self._warned_no_data = True
+            log.warning("Da %.0fs nhung chua nhan duoc telemetry nao. Kiem tra topic '%s' va bridge.",
+                        uptime, settings.telemetry_topic)
+        elif (self.last_telemetry_at is not None
+              and now - self.last_telemetry_at > 120 and not self._warned_no_data):
+            self._warned_no_data = True
+            last = datetime.fromtimestamp(self.last_telemetry_at, timezone.utc)
+            log.warning("Khong nhan duoc telemetry moi trong %.0fs (lan cuoi %s UTC).",
+                        now - self.last_telemetry_at, last.strftime("%H:%M:%S"))
+
     @staticmethod
     def _safe(fn) -> None:
         try:
@@ -323,7 +370,15 @@ def build_mqtt_client(collector: Collector) -> mqtt.Client:
             return
         log.info("Da ket noi MQTT %s:%d (session_present=%s)",
                  settings.mqtt_host, settings.mqtt_port, flags.session_present)
-        cl.subscribe([(settings.telemetry_topic, 1), (settings.status_topic, 1)])
+        collector.connected_at = time.time()
+        collector.bridge_state = None
+        collector._warned_no_bridge = False
+        collector._warned_no_data = False
+        # Topic $SYS retained cho biet bridge public-emqx da ket noi chua.
+        # Neu broker la Mosquitto khac (vd. service cai tren Windows), topic
+        # nay se khong ton tai -> health_check canh bao ngay.
+        cl.subscribe([(settings.telemetry_topic, 1), (settings.status_topic, 1),
+                      (settings.bridge_state_topic, 0)])
 
     def on_disconnect(cl, userdata, flags, reason_code, properties):
         log.warning("Mat ket noi MQTT (%s), dang ket noi lai...", reason_code)
@@ -331,7 +386,9 @@ def build_mqtt_client(collector: Collector) -> mqtt.Client:
     def on_message(cl, userdata, msg):
         recv_s = time.time()
         try:
-            if mqtt.topic_matches_sub(settings.status_topic, msg.topic):
+            if msg.topic == settings.bridge_state_topic:
+                collector.handle_bridge_state(msg.payload)
+            elif mqtt.topic_matches_sub(settings.status_topic, msg.topic):
                 collector.handle_status(msg.topic, msg.payload)
             else:
                 collector.handle_telemetry(msg.topic, msg.payload, recv_s)
@@ -352,6 +409,15 @@ def main() -> None:
         log.error("Khong ket noi duoc MongoDB (%s). Da chay 'docker compose up -d' chua?", exc)
         sys.exit(1)
 
+    try:
+        # Tao schema ngay khi collector khoi dong. Neu bo qua init_db.py,
+        # insert dau tien se tao collection thuong va rat kho sua ve sau.
+        init_schema(db)
+    except Exception as exc:  # noqa: BLE001 - loi schema phai dung han, khong ghi sai
+        log.error("Khong the khoi tao schema MongoDB: %s", exc)
+        log.error("Chay 'python init_db.py' (hoac 'python init_db.py --reset') roi thu lai.")
+        sys.exit(1)
+
     collector = Collector(db)
     collector.warm_up()
     client = build_mqtt_client(collector)
@@ -366,14 +432,17 @@ def main() -> None:
         log.error("Khong ket noi duoc MQTT %s:%d (%s)", settings.mqtt_host, settings.mqtt_port, exc)
         sys.exit(1)
     client.loop_start()
-    log.info("Dang lang nghe %s va %s ... (Ctrl+C de dung)",
-             settings.telemetry_topic, settings.status_topic)
+    log.info("Dang lang nghe %s va %s tren %s:%d | bridge-state=%s ... (Ctrl+C de dung)",
+             settings.telemetry_topic, settings.status_topic, settings.mqtt_host,
+             settings.mqtt_port, settings.bridge_state_topic)
 
     last_report, last_count = time.time(), 0
     while not stop_event.wait(1):
+        collector.health_check(client)
         if time.time() - last_report >= 60:
             rate = (collector.stats["received"] - last_count) / (time.time() - last_report)
-            log.info("Thong ke: %s | %.2f msg/s", collector.stats, rate)
+            log.info("Thong ke: %s | bridge=%s | %.2f msg/s",
+                     collector.stats, collector.bridge_state or "unknown", rate)
             last_report, last_count = time.time(), collector.stats["received"]
 
     log.info("Dung collector. Thong ke: %s", collector.stats)
