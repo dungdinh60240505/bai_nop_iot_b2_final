@@ -22,6 +22,7 @@ LATENCY = "latency_log"         # log do tre end-to-end (TTL)
 REJECTED = "rejected_messages"  # goi tin khong hop le (TTL)
 DEVICES = "device_status"       # trang thai + bo dem chat luong theo thiet bi
 RUNS = "preprocess_runs"        # nhat ky moi lan chay tien xu ly
+FORECAST = "forecast_b3"        # Bai 3: du bao temperature_forecast_next60s
 
 SENSOR_FIELDS = ["temperature", "humidity", "distance_cm"]
 

@@ -1,0 +1,112 @@
+{
+  "data_path": "du_lieu_mau_B2.csv",
+  "data_note": "Bộ mẫu tạo bằng Python (bai3/tao_du_lieu_mau.py, seed=3), 720 dòng = 60 phút, chu kỳ 5 s, theo schema kế thừa Bài 2. KHÔNG phải dữ liệu tải từ ThingsBoard/MongoDB. Dùng để kiểm tra quy trình khi chưa xuất được du_lieu_B2.csv của nhóm.",
+  "time_format": "ms",
+  "device_id": "mau-python-01",
+  "data_source": [
+    "python_sample"
+  ],
+  "rows_in": 720,
+  "duplicates": 0,
+  "rows_after_check": 720,
+  "missing_after_check": {
+    "temperature": 0,
+    "humidity": 3,
+    "distance_cm": 3
+  },
+  "out_of_range_set_nan": {
+    "temperature": 0,
+    "humidity": 1,
+    "distance_cm": 1
+  },
+  "segments": 1,
+  "time_start": "2026-10-20T08:00:00+07:00",
+  "time_end": "2026-10-20T08:59:55+07:00",
+  "window_seconds": 60,
+  "N": 12,
+  "step": 6,
+  "cut": "2026-10-20T08:42:00+07:00",
+  "pairs_before_filter": {
+    "train": 81,
+    "test": 33
+  },
+  "pairs_valid": {
+    "train": 81,
+    "test": 33
+  },
+  "dropped": {
+    "train": {
+      "X_khuyet_qua_10%": 0,
+      "y_thieu_nhiet_do_goc": 0
+    },
+    "test": {
+      "X_khuyet_qua_10%": 0,
+      "y_thieu_nhiet_do_goc": 0
+    }
+  },
+  "features": [
+    "temperature_mean",
+    "temperature_std",
+    "temperature_min",
+    "temperature_max",
+    "temperature_range",
+    "temperature_delta",
+    "temperature_slope",
+    "humidity_mean",
+    "humidity_std",
+    "humidity_min",
+    "humidity_max",
+    "humidity_range",
+    "humidity_delta",
+    "humidity_slope",
+    "distance_cm_mean",
+    "distance_cm_std",
+    "distance_cm_min",
+    "distance_cm_max",
+    "distance_cm_range",
+    "distance_cm_delta",
+    "distance_cm_slope"
+  ],
+  "k": 6,
+  "alpha": 1.0,
+  "selected_features": [
+    "temperature_mean",
+    "temperature_min",
+    "temperature_max",
+    "temperature_delta",
+    "temperature_slope",
+    "humidity_min"
+  ],
+  "metrics": {
+    "Mean_train": {
+      "MAE (°C)": 2.1615,
+      "RMSE (°C)": 2.5197
+    },
+    "Persistence": {
+      "MAE (°C)": 1.4665,
+      "RMSE (°C)": 1.6809
+    },
+    "Ridge_21": {
+      "MAE (°C)": 0.8891,
+      "RMSE (°C)": 1.1332
+    },
+    "Ridge_6": {
+      "MAE (°C)": 0.7823,
+      "RMSE (°C)": 0.9773
+    }
+  },
+  "example_forecast": {
+    "temperature_forecast_next60s": 27.22,
+    "forecast_issued_at": "2026-10-20T09:00:00+07:00",
+    "input_window": [
+      "2026-10-20T08:59:00+07:00",
+      "2026-10-20T09:00:00+07:00"
+    ],
+    "forecast_window": [
+      "2026-10-20T09:00:00+07:00",
+      "2026-10-20T09:01:00+07:00"
+    ],
+    "model": "Ridge_6"
+  },
+  "compute_ms": 6.142
+}

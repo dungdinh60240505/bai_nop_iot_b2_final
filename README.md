@@ -1,4 +1,7 @@
-# Bài thực hành số 2 – Thu thập, lưu trữ và tiền xử lý dữ liệu IoT
+# Bài thực hành IoT – ESP32/Wokwi → MQTT → MongoDB → Phân tích
+
+- **Bài 2:** Thu thập, lưu trữ và tiền xử lý dữ liệu IoT (phần dưới)
+- **Bài 3:** Trích chọn đặc trưng và học từ dữ liệu IoT → xem [`bai3/README.md`](bai3/README.md)
 
 ## Cấu trúc thư mục
 
@@ -16,6 +19,9 @@
 | `server/dashboard.py` | Dashboard/App Streamlit: real-time, đã xử lý, độ trễ, lưu trữ |
 | `server/evaluate.py` | Xuất bảng số liệu độ trễ / chất lượng / dung lượng cho báo cáo |
 | `server/benchmark_storage.py` | So sánh Time-series vs collection thường |
+| `server/export_b2_csv.py` | **Bài 3** – xuất lịch sử `sensor_raw` thành `bai3/du_lieu_B2.csv` (đơn vị vật lý, chưa chuẩn hoá) |
+| `server/forecast_b3.py` | **Bài 3** – dự báo `temperature_forecast_next60s` mỗi 30 s, ghi collection `forecast_b3` |
+| `bai3/` | **Bài 3** – notebook `Bai3_Sinh_vien.ipynb`, bộ mẫu, `ket_qua_B3/`, báo cáo `Bao_cao_B3.docx` |
 
 ## Yêu cầu
 
@@ -55,6 +61,10 @@ streamlit run dashboard.py      # http://localhost:8501
 # 8. Số liệu cho báo cáo
 python evaluate.py --minutes 120
 python benchmark_storage.py
+
+# 9. Bài 3: xuất CSV -> chạy notebook bai3/Bai3_Sinh_vien.ipynb -> dự báo trực tuyến
+python export_b2_csv.py --device esp32-room1 --minutes 60
+python forecast_b3.py --device esp32-room1     # tab "🔮 Dự báo (Bài 3)" trên dashboard
 ```
 
 Kiểm tra nhanh luồng MQTT: `docker exec -it iot-mosquitto mosquitto_sub -t "iot/#" -v`

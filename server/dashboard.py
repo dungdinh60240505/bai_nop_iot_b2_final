@@ -7,6 +7,7 @@ Tab:
   2. Da tien xu ly    : tho vs da xu ly, outlier, rolling mean, delta, du lieu chuan hoa
   3. Do tre           : p50/p95/p99 cua net/db/e2e, histogram, theo thoi gian
   4. Luu tru & chat luong: kich thuoc collection, mat/trung/loi goi, nhat ky tien xu ly
+  5. Du bao (Bai 3)   : temperature_forecast_next60s tu forecast_b3.py, doi chieu sau khi phut ket thuc
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 import preprocess
-from common import (DEVICES, LATENCY, PROCESSED, RAW, REJECTED, RUNS, SENSOR_FIELDS,
+from common import (DEVICES, FORECAST, LATENCY, PROCESSED, RAW, REJECTED, RUNS, SENSOR_FIELDS,
                     get_db, settings)
 
 LABELS = {"temperature": "Nhiệt độ (°C)", "humidity": "Độ ẩm (%)", "distance_cm": "Khoảng cách (cm)"}
@@ -67,6 +68,16 @@ def query_latency(device: str, start: datetime) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     if not df.empty:
         df["recv_at"] = pd.to_datetime(df["recv_at"], utc=True)
+    return df
+
+
+def query_forecast(device: str, start: datetime) -> pd.DataFrame:
+    rows = list(db()[FORECAST].find({"meta.device_id": device, "ts": {"$gte": start}},
+                                    {"_id": 0, "meta": 0, "selected_features": 0}).sort("ts", 1))
+    df = pd.DataFrame(rows)
+    for c in ["ts", "forecast_window_start", "forecast_window_end"]:
+        if c in df:
+            df[c] = pd.to_datetime(df[c], utc=True)
     return df
 
 
@@ -121,8 +132,8 @@ with st.sidebar:
     window = st.selectbox("Cửa sổ dữ liệu đã xử lý", ["1min", "5min", "30s", "15min", "1h"])
     st.caption(f"Múi giờ hiển thị: {settings.timezone}")
 
-tab_rt, tab_proc, tab_lat, tab_store = st.tabs(
-    ["⚡ Real-time", "🧹 Đã tiền xử lý", "⏱️ Độ trễ", "💾 Lưu trữ & chất lượng"])
+tab_rt, tab_proc, tab_lat, tab_store, tab_fc = st.tabs(
+    ["⚡ Real-time", "🧹 Đã tiền xử lý", "⏱️ Độ trễ", "💾 Lưu trữ & chất lượng", "🔮 Dự báo (Bài 3)"])
 
 
 @st.fragment(run_every=f"{refresh}s")
@@ -316,6 +327,70 @@ def storage_panel() -> None:
         st.dataframe(rej, hide_index=True, width="stretch")
 
 
+@st.fragment(run_every=f"{max(refresh, 10)}s")
+def forecast_panel() -> None:
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(minutes=RANGES[range_label])
+    fc = query_forecast(device, start)
+    if fc.empty:
+        st.info("Chưa có dự báo. Chạy notebook bai3/Bai3_Sinh_vien.ipynb (lưu model) rồi "
+                f"`python forecast_b3.py --device {device}`.")
+        return
+    raw = query_raw(device, start - timedelta(minutes=2))
+    # Nhãn thật: mean nhiệt độ của phút dự báo, chỉ tính khi phút đó đã kết thúc và đủ 12 mẫu
+    actual, n_obs = [], []
+    for _, r in fc.iterrows():
+        m = raw[(raw["ts"] >= r["forecast_window_start"]) & (raw["ts"] < r["forecast_window_end"])] \
+            if not raw.empty else raw
+        vals = m["temperature"].dropna() if not m.empty else pd.Series(dtype=float)
+        done = r["forecast_window_end"] <= now
+        actual.append(vals.mean() if done and len(vals) >= 12 else float("nan"))
+        n_obs.append(len(vals))
+    fc["actual_mean_next60s"] = actual
+    fc["error"] = fc["temperature_forecast_next60s"] - fc["actual_mean_next60s"]
+
+    last = fc.iloc[-1]
+    cols = st.columns(4)
+    cur = raw["temperature"].dropna().iloc[-1] if not raw.empty and raw["temperature"].notna().any() else None
+    cols[0].metric("Nhiệt độ hiện tại (telemetry)", "—" if cur is None else f"{cur:.2f} °C")
+    cols[1].metric("Dự báo TB 60 s tới", f"{last['temperature_forecast_next60s']:.2f} °C",
+                   None if cur is None else f"{last['temperature_forecast_next60s'] - cur:+.2f} so với hiện tại",
+                   delta_color="off")
+    cols[2].metric("Phát lúc", local(pd.Series([last["ts"]])).iloc[0].strftime("%H:%M:%S"),
+                   f"cho {local(pd.Series([last['forecast_window_start']])).iloc[0]:%H:%M:%S}"
+                   f"–{local(pd.Series([last['forecast_window_end']])).iloc[0]:%H:%M:%S}", delta_color="off")
+    scored = fc.dropna(subset=["actual_mean_next60s"])
+    if not scored.empty:
+        mae = scored["error"].abs().mean()
+        rmse = (scored["error"] ** 2).mean() ** 0.5
+        cols[3].metric("MAE / RMSE đã chấm", f"{mae:.2f} / {rmse:.2f} °C", f"{len(scored)} dự báo", delta_color="off")
+    else:
+        cols[3].metric("MAE / RMSE đã chấm", "—", "chờ phút dự báo kết thúc", delta_color="off")
+    st.caption("Giá trị dự báo là nhiệt độ TRUNG BÌNH của phút tương lai (khoá temperature_forecast_next60s), "
+               "khác số đo temperature hiện tại. Model Ridge_6 huấn luyện từ "
+               f"`{last.get('trained_on', '?')}` — nếu là bộ mẫu Python thì chỉ minh hoạ luồng tích hợp.")
+
+    fig = go.Figure()
+    if not raw.empty:
+        fig.add_trace(go.Scatter(x=local(raw["ts"]), y=raw["temperature"], mode="lines", name="temperature (5 s)",
+                                 line={"color": "#9aa0a6", "width": 1}))
+    mid = fc["forecast_window_start"] + (fc["forecast_window_end"] - fc["forecast_window_start"]) / 2
+    fig.add_trace(go.Scatter(x=local(mid), y=fc["temperature_forecast_next60s"], mode="lines+markers",
+                             name="Dự báo TB phút tới", line={"color": "#e45756", "dash": "dash"}))
+    fig.add_trace(go.Scatter(x=local(mid), y=fc["actual_mean_next60s"], mode="markers",
+                             name="TB thực của phút đó", marker={"color": "#111", "size": 7}))
+    fig.update_layout(height=420, margin={"l": 10, "r": 10, "t": 30, "b": 10}, yaxis_title="°C",
+                      legend={"orientation": "h"})
+    st.plotly_chart(fig, width="stretch")
+
+    show = fc.tail(15).iloc[::-1].copy()
+    for c in ["ts", "forecast_window_start", "forecast_window_end"]:
+        show[c] = local(show[c]).dt.strftime("%H:%M:%S")
+    st.dataframe(show[["ts", "forecast_window_start", "forecast_window_end", "current_temperature",
+                       "temperature_forecast_next60s", "actual_mean_next60s", "error", "compute_ms"]].round(3),
+                 hide_index=True, width="stretch")
+
+
 with tab_rt:
     realtime_panel()
 with tab_proc:
@@ -324,3 +399,5 @@ with tab_lat:
     latency_panel()
 with tab_store:
     storage_panel()
+with tab_fc:
+    forecast_panel()

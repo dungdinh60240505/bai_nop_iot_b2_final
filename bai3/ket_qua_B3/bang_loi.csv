@@ -1,0 +1,5 @@
+cau_hinh,MAE (°C),RMSE (°C),số cột X
+Mean_train,2.1615,2.5197,0
+Persistence,1.4665,1.6809,1
+Ridge_21,0.8891,1.1332,21
+Ridge_6,0.7823,0.9773,6
